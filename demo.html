@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Voxelize — no-build preview</title>
+
+    <!--
+      Zero-install preview of the effect. It pulls Vue 3.5 from a CDN and
+      reuses src/lib/voxelEngine.js, the same engine the SFC uses.
+      The canonical component is src/components/VoxelizeButton.vue — the
+      wrapper below is a mirror of it for browsers without a bundler.
+    -->
+    <script type="importmap">
+      {
+        "imports": {
+          "vue": "https://unpkg.com/vue@3.5.43/dist/vue.esm-browser.prod.js"
+        }
+      }
+    </script>
+
+    <style>
+      :root {
+        color-scheme: dark;
+        --page-bg: #08060f;
+        --page-ink: #ece9fb;
+        font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+      }
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0;
+        min-height: 100%;
+        background: var(--page-bg);
+        color: var(--page-ink);
+      }
+      body {
+        display: grid;
+        place-items: center;
+        padding: 3rem 1.25rem;
+        background-image:
+          radial-gradient(60rem 30rem at 50% -10%, rgba(109, 59, 245, 0.28), transparent 70%),
+          radial-gradient(40rem 24rem at 85% 110%, rgba(168, 85, 247, 0.16), transparent 70%);
+        background-attachment: fixed;
+      }
+      .stage { width: min(46rem, 100%); text-align: center; }
+      .stage__head { margin-bottom: 2.5rem; }
+      .kicker {
+        margin: 0 0 0.6rem;
+        font-size: 0.72rem; font-weight: 700; letter-spacing: 0.42em;
+        text-transform: uppercase; color: #a78bfa;
+      }
+      h1 {
+        margin: 0;
+        font-size: clamp(2.6rem, 9vw, 4.25rem);
+        font-weight: 800; letter-spacing: -0.03em; line-height: 1;
+        background: linear-gradient(100deg, #ffffff, #c4b5fd 55%, #7c3aed);
+        -webkit-background-clip: text; background-clip: text; color: transparent;
+      }
+      .lede {
+        margin: 1.1rem auto 0; max-width: 34rem;
+        font-size: 0.95rem; line-height: 1.65; color: #a49dc0;
+      }
+      .row {
+        display: flex; flex-wrap: wrap; justify-content: center;
+        align-items: center; gap: 1.1rem;
+      }
+      .btn--mint { --vx-surface: #0f9d8f; --vx-surface-alt: #4ade80; --vx-ink: #04211d; }
+      .btn--ember { --vx-surface: #b91c1c; --vx-surface-alt: #fb923c; }
+
+      .controls {
+        margin-top: 3rem; display: flex; flex-wrap: wrap;
+        justify-content: center; align-items: center; gap: 1.75rem;
+      }
+      .control {
+        display: flex; align-items: center; gap: 0.75rem;
+        font-size: 0.78rem; letter-spacing: 0.06em; text-transform: uppercase;
+        color: #a49dc0;
+      }
+      .control em { font-style: normal; color: #ece9fb; }
+      .control--check { cursor: pointer; user-select: none; }
+      input[type='range'] { width: 8.5rem; accent-color: #8b5cf6; }
+      input[type='checkbox'] { width: 1rem; height: 1rem; accent-color: #8b5cf6; }
+      select {
+        padding: 0.35rem 0.5rem; border: 1px solid #33285a; border-radius: 9px;
+        background: #150f28; color: var(--page-ink); font: inherit; font-size: 0.78rem;
+        text-transform: none; letter-spacing: 0; cursor: pointer;
+      }
+      input[type='color'] {
+        width: 2.4rem; height: 1.6rem; padding: 0; border: 1px solid #33285a;
+        border-radius: 9px; background: #150f28; cursor: pointer;
+      }
+      .controls + .controls { margin-top: 1.35rem; }
+      .ghost {
+        padding: 0.42rem 0.95rem; border: 1px solid #3a2f63; border-radius: 999px;
+        background: rgba(124, 58, 237, 0.12); color: #c4b5fd; font: inherit;
+        font-size: 0.7rem; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase;
+        cursor: pointer;
+        transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+      }
+      .ghost:hover { border-color: #6d3bf5; background: rgba(124, 58, 237, 0.24); color: var(--page-ink); }
+      .hint {
+        max-width: 34rem; margin: 1.75rem auto 0; font-size: 0.74rem;
+        line-height: 1.6; letter-spacing: 0.04em; color: #574f74;
+      }
+      .log { margin-top: 2.5rem; font-size: 0.82rem; color: #6f6890; }
+      .log b { color: #c4b5fd; }
+      .log code { color: #ece9fb; font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; }
+      .fallback { color: #fca5a5; font-size: 0.95rem; line-height: 1.6; }
+      .fallback code { color: #fecaca; }
+
+      /* --- styles lifted from src/components/VoxelizeButton.vue (unscoped) --- */
+      /* defaults live in the var() fallbacks so a single-class theme can win */
+      .voxelize {
+        position: relative;
+        display: inline-flex; align-items: center; justify-content: center;
+        padding: 0.85rem 1.6rem;
+        border: 0; border-radius: var(--vx-radius, 14px); background: none;
+        color: var(--vx-ink, #ffffff);
+        font: inherit; font-size: 0.92rem; font-weight: 650;
+        letter-spacing: 0.09em; text-transform: uppercase;
+        cursor: pointer; overflow: visible; isolation: isolate;
+        touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+      }
+      .voxelize__face {
+        position: absolute; inset: 0; border-radius: inherit;
+        background: linear-gradient(100deg, var(--vx-surface, #6d3bf5), var(--vx-surface-alt, #a855f7));
+        box-shadow:
+          0 12px 26px -14px rgba(20, 6, 60, 0.85),
+          inset 0 1px 0 rgba(255, 255, 255, 0.28);
+        transition: transform 0.22s ease, box-shadow 0.22s ease;
+      }
+      .voxelize__label { position: relative; z-index: 1; }
+      /* the engine sets left/top/width/height itself; it bleeds past the button */
+      .voxelize__canvas {
+        position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+        pointer-events: none; z-index: 2;
+      }
+      .voxelize:hover:not(:disabled) .voxelize__face {
+        transform: translateY(-1px);
+        box-shadow:
+          0 18px 32px -14px rgba(20, 6, 60, 0.9),
+          inset 0 1px 0 rgba(255, 255, 255, 0.34);
+      }
+      .voxelize:active:not(:disabled) .voxelize__face { transform: translateY(0) scale(0.985); }
+      .voxelize:focus-visible { outline: 2px solid rgba(236, 233, 251, 0.7); outline-offset: 3px; }
+      .voxelize:disabled { cursor: not-allowed; opacity: 0.55; }
+      /* not animated on purpose: the canvas cross-fades the reassembled mosaic
+         out over the face, so visibility never depends on a CSS transition */
+      .voxelize.is-shattered .voxelize__face,
+      .voxelize.is-shattered .voxelize__label { opacity: 0; transition: none; }
+    </style>
+  </head>
+
+  <body>
+    <div id="app"></div>
+
+    <script>
+      // Friendly message if the CDN is unreachable.
+      setTimeout(function () {
+        var app = document.getElementById('app')
+        if (app && !app.childElementCount) {
+          app.innerHTML =
+            '<p class="fallback">Could not load Vue from the CDN (offline?).<br />' +
+            'Use the bundler instead: <code>npm install &amp;&amp; npm run dev</code></p>'
+        }
+      }, 4000)
+    </script>
+
+    <script type="module">
+      import { computed, createApp, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+      import { createVoxelEngine } from './src/lib/voxelEngine.js'
+
+      // Mirror of src/components/VoxelizeButton.vue (no bundler here, so it is
+      // written as a plain component). Same markup, same engine, same CSS.
+      const VoxelizeButton = {
+        props: {
+          label: { type: String, default: 'Voxelize' },
+          voxelSize: { type: Number, default: 0 },
+          gap: { type: Number, default: 0.45 },
+          stressRadius: { type: Number, default: 26 },
+          depth: { type: Number, default: 1 },
+          duration: { type: Number, default: 0 },
+          easing: { type: String, default: 'back' },
+          dissolve: { type: Number, default: 0 },
+          autoReform: { type: Boolean, default: true },
+          surface: { type: String, default: '' },
+          surfaceAlt: { type: String, default: '' },
+          ink: { type: String, default: '' },
+          radius: { type: [Number, String], default: null },
+          disabled: { type: Boolean, default: false },
+        },
+        emits: ['shatter', 'restored'],
+        template: `
+          <button ref="root" class="voxelize" type="button" :style="themeStyle" :disabled="disabled">
+            <span class="voxelize__face" aria-hidden="true"></span>
+            <span ref="labelEl" class="voxelize__label"><slot>{{ label }}</slot></span>
+            <canvas ref="canvasEl" class="voxelize__canvas" aria-hidden="true"></canvas>
+          </button>
+        `,
+        setup(props, { emit }) {
+          const root = ref(null)
+          const labelEl = ref(null)
+          const canvasEl = ref(null)
+          let engine = null
+
+          const themeStyle = computed(() => {
+            const style = {}
+            if (props.surface) style['--vx-surface'] = props.surface
+            if (props.surfaceAlt) style['--vx-surface-alt'] = props.surfaceAlt
+            if (props.ink) style['--vx-ink'] = props.ink
+            if (props.radius !== null && props.radius !== '') {
+              style.borderRadius = typeof props.radius === 'number' ? props.radius + 'px' : props.radius
+            }
+            return style
+          })
+
+          onMounted(() => {
+            engine = createVoxelEngine({
+              root: root.value,
+              canvas: canvasEl.value,
+              label: labelEl.value,
+              voxelSize: props.voxelSize,
+              gap: props.gap,
+              stressRadius: props.stressRadius,
+              depth: props.depth,
+              duration: props.duration,
+              easing: props.easing,
+              dissolve: props.dissolve,
+              autoReform: props.autoReform,
+            })
+            engine.on('shatter', () => emit('shatter'))
+            engine.on('restored', () => emit('restored'))
+          })
+
+          onBeforeUnmount(() => {
+            engine?.destroy()
+            engine = null
+          })
+
+          watch(
+            () => [
+              props.voxelSize,
+              props.gap,
+              props.stressRadius,
+              props.depth,
+              props.duration,
+              props.easing,
+              props.dissolve,
+              props.autoReform,
+            ],
+            () =>
+              engine?.setOptions({
+                voxelSize: props.voxelSize,
+                gap: props.gap,
+                stressRadius: props.stressRadius,
+                depth: props.depth,
+                duration: props.duration,
+                easing: props.easing,
+                dissolve: props.dissolve,
+                autoReform: props.autoReform,
+              }),
+          )
+
+          // colours and radius are read back out of the DOM, so let the render land first
+          watch(() => [props.surface, props.surfaceAlt, props.ink, props.radius], () => engine?.sync())
+
+          return {
+            root,
+            labelEl,
+            canvasEl,
+            themeStyle,
+            reset: () => engine?.reform(),
+            shatter: () => engine?.explode(),
+          }
+        },
+      }
+
+      const App = {
+        components: { VoxelizeButton },
+        template: `
+          <main class="stage">
+            <header class="stage__head">
+              <p class="kicker">Crush</p>
+              <h1>Voxelize</h1>
+              <p class="lede">
+                Hover a button to trace hairline fractures under the pointer. Click it and the whole
+                thing comes apart into little cubes — then snaps back together.
+              </p>
+            </header>
+
+            <div class="row">
+              <VoxelizeButton :ref="(el) => register(el, 0)" :voxel-size="cubeSize" :radius="radius"
+                :depth="depth" :duration="duration" :easing="easing" :dissolve="dissolve"
+                :auto-reform="autoReform" :surface="surface" :surface-alt="surfaceAlt" :disabled="disabled"
+                @shatter="(shatters++, last = 'shatter')" @restored="last = 'reformed'" />
+
+              <VoxelizeButton :ref="(el) => register(el, 1)" class="btn--mint" :voxel-size="cubeSize"
+                :radius="radius" :depth="depth" :duration="duration" :easing="easing" :dissolve="dissolve"
+                :auto-reform="autoReform" :disabled="disabled"
+                @shatter="(shatters++, last = 'shatter')" @restored="last = 'reformed'">
+                Reform
+              </VoxelizeButton>
+
+              <VoxelizeButton :ref="(el) => register(el, 2)" class="btn--ember" label="Obliterate"
+                :voxel-size="cubeSize" :radius="radius" :depth="depth" :duration="duration"
+                :easing="easing" :dissolve="dissolve" :auto-reform="autoReform" :disabled="disabled"
+                @shatter="(shatters++, last = 'shatter')" @restored="last = 'reformed'" />
+            </div>
+
+            <div class="controls">
+              <label class="control">
+                <span>cube size <em>{{ cubeSize ? cubeSize + 'px' : 'auto' }}</em></span>
+                <input type="range" min="0" max="14" step="1" v-model.number="cubeSize" />
+              </label>
+              <label class="control">
+                <span>radius <em>{{ radius }}px</em></span>
+                <input type="range" min="0" max="34" step="1" v-model.number="radius" />
+              </label>
+              <label class="control">
+                <span>surface</span>
+                <input type="color" v-model="surface" />
+              </label>
+              <label class="control">
+                <span>alt</span>
+                <input type="color" v-model="surfaceAlt" />
+              </label>
+              <label class="control control--check">
+                <input type="checkbox" v-model="disabled" />
+                <span>disabled</span>
+              </label>
+            </div>
+
+            <div class="controls">
+              <label class="control">
+                <span>camera</span>
+                <select v-model.number="depth">
+                  <option :value="1">toward</option>
+                  <option :value="0">flat</option>
+                  <option :value="-1">away</option>
+                </select>
+              </label>
+              <label class="control">
+                <span>duration <em>{{ durationLabel() }}</em></span>
+                <input type="range" min="0" max="5" step="0.25" v-model.number="duration" />
+              </label>
+              <label class="control">
+                <span>easing</span>
+                <select v-model="easing">
+                  <option value="back">back</option>
+                  <option value="linear">linear</option>
+                  <option value="out">out</option>
+                  <option value="in">in</option>
+                  <option value="inout">in out</option>
+                </select>
+              </label>
+              <label class="control">
+                <span>dissolve <em>{{ dissolveLabel() }}</em></span>
+                <input type="range" min="0" max="0.12" step="0.01" v-model.number="dissolve" />
+              </label>
+              <label class="control control--check">
+                <input type="checkbox" v-model="autoReform" />
+                <span>auto-reform</span>
+              </label>
+              <button class="ghost" type="button" @click="reassemble">reassemble</button>
+            </div>
+
+            <p class="hint">
+              the first button is driven by the colour props, the others by CSS variables · with
+              auto-reform off, use reassemble to bring the pieces back
+            </p>
+
+            <p class="log"><b>{{ shatters }}</b> shatters · last event: <code>{{ last }}</code></p>
+          </main>
+        `,
+        setup() {
+          const duration = ref(0)
+          const dissolve = ref(0)
+          const buttons = []
+          const register = (el, i) => {
+            if (el) buttons[i] = el
+          }
+          const reassemble = () => buttons.forEach((b) => b && b.reset && b.reset())
+
+          return {
+            shatters: ref(0),
+            last: ref('idle'),
+            cubeSize: ref(0),
+            radius: ref(14),
+            depth: ref(1),
+            duration,
+            easing: ref('back'),
+            dissolve,
+            autoReform: ref(true),
+            surface: ref('#6d3bf5'),
+            surfaceAlt: ref('#a855f7'),
+            disabled: ref(false),
+            register,
+            reassemble,
+            durationLabel: () => (duration.value === 0 ? 'default' : duration.value + 's'),
+            dissolveLabel: () => (dissolve.value === 0 ? 'off' : Math.round(dissolve.value * 100) + '%/frame'),
+          }
+        },
+      }
+
+      createApp(App).mount('#app')
+    </script>
+  </body>
+</html>
